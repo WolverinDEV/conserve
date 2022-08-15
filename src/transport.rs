@@ -23,7 +23,11 @@ use url::Url;
 use crate::*;
 
 pub mod local;
+pub mod debug; // FIXME(WolverinDEV): Do not expose publicly?
+
 use local::LocalTransport;
+
+use self::debug::DebugTransport;
 
 /// Open a `Transport` to access a local directory.
 ///
@@ -36,14 +40,22 @@ pub fn open_transport(s: &str) -> Result<Box<dyn Transport>> {
             ))),
             d if d.len() == 1 => {
                 // Probably a Windows path with drive letter, like "c:/thing", not actually a URL.
-                Ok(Box::new(LocalTransport::new(Path::new(s))))
+                Ok(
+                    Box::new(DebugTransport::new(
+                        Box::new(LocalTransport::new(Path::new(s)))
+                    ))
+                )
             }
             other => Err(Error::UrlScheme {
                 scheme: other.to_owned(),
             }),
         }
     } else {
-        Ok(Box::new(LocalTransport::new(Path::new(s))))
+        Ok(
+            Box::new(DebugTransport::new(
+                Box::new(LocalTransport::new(Path::new(s)))
+            ))
+        )
     }
 }
 
