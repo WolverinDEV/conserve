@@ -35,6 +35,8 @@ pub struct BackupOptions {
     pub exclude: Exclude,
 
     pub max_entries_per_hunk: usize,
+
+    pub no_index: bool,
 }
 
 impl Default for BackupOptions {
@@ -42,6 +44,7 @@ impl Default for BackupOptions {
         BackupOptions {
             exclude: Exclude::nothing(),
             max_entries_per_hunk: crate::index::MAX_ENTRIES_PER_HUNK,
+            no_index: false
         }
     }
 }
@@ -60,7 +63,7 @@ pub fn backup(
     let monitor = monitor.unwrap_or(&NULL_MONITOR);
 
     let start = Instant::now();
-    let mut writer = BackupWriter::begin(archive)?;
+    let mut writer = BackupWriter::begin(archive, options.no_index)?;
     let mut stats = BackupStats::default();
 
     let entry_iter = source.iter_entries(Apath::root(), options.exclude.clone())?;
@@ -113,11 +116,13 @@ impl BackupWriter {
     /// Create a new BackupWriter.
     ///
     /// This currently makes a new top-level band.
-    pub fn begin(archive: &Archive) -> Result<BackupWriter> {
+    pub fn begin(archive: &Archive, no_index: bool) -> Result<BackupWriter> {
         if gc_lock::GarbageCollectionLock::is_locked(archive)? {
             return Err(Error::GarbageCollectionLockHeld);
         }
-        let basis_index = IterStitchedIndexHunks::new(archive, archive.last_band_id()?)
+
+        let index_band_id = if no_index { None } else { archive.last_band_id()? };
+        let basis_index = IterStitchedIndexHunks::new(archive, index_band_id)
             .iter_entries(Apath::root(), Exclude::nothing());
 
         // Create the new band only after finding the basis band!

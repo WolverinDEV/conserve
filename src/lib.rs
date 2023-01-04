@@ -45,6 +45,7 @@ mod tree;
 pub mod ui;
 pub mod unix_time;
 mod validate;
+mod blockindex;
 
 pub use crate::apath::Apath;
 pub use crate::archive::Archive;
@@ -77,6 +78,7 @@ pub use crate::tree::{ReadBlocks, ReadTree, TreeSize};
 pub use crate::validate::{
     BandProblem, BandValidateError, BlockLengths, BlockMissingReason, ValidateOptions,
 };
+pub use crate::blockindex::BlockIndex;
 
 pub type Result<T> = std::result::Result<T, Error>;
 

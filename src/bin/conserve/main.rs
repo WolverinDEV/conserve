@@ -86,6 +86,10 @@ enum Command {
         exclude_from: Vec<String>,
         #[clap(long)]
         no_stats: bool,
+        /// Don't use the backups index.
+        /// Instead store all files (deduplication will still be active).
+        #[clap(long)]
+        no_index: bool,
     },
 
     #[clap(subcommand)]
@@ -290,11 +294,13 @@ impl Command {
                 exclude,
                 exclude_from,
                 no_stats,
+                no_index
             } => {
                 let exclude = ExcludeBuilder::from_args(exclude, exclude_from)?.build()?;
                 let source = &LiveTree::open(source)?;
                 let options = BackupOptions {
                     exclude,
+                    no_index: *no_index,
                     ..Default::default()
                 };
 

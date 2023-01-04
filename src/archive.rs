@@ -84,7 +84,7 @@ impl Archive {
         if !names.files.is_empty() || !names.dirs.is_empty() {
             return Err(Error::NewArchiveDirectoryNotEmpty);
         }
-        let block_dir = BlockDir::create(transport.sub_transport(BLOCK_DIR))?;
+        let block_dir = BlockDir::create(Arc::from(transport.sub_transport(BLOCK_DIR)))?;
         write_json(
             &transport,
             HEADER_FILENAME,
@@ -120,7 +120,8 @@ impl Archive {
                 version: header.conserve_archive_version,
             });
         }
-        let block_dir = BlockDir::open(transport.sub_transport(BLOCK_DIR));
+
+        let block_dir = BlockDir::open_cached(Arc::from(transport.sub_transport(BLOCK_DIR)));
         Ok(Archive {
             block_dir,
             transport: Arc::from(transport),

@@ -35,6 +35,7 @@ use serde::{Deserialize, Serialize};
 use tracing::{error, warn};
 
 use crate::blockhash::BlockHash;
+use crate::blockindex::{FsBlockIndex, CachedBlockIndex};
 use crate::compress::snappy::{Compressor, Decompressor};
 use crate::kind::Kind;
 use crate::monitor::ValidateProgress;
@@ -70,6 +71,7 @@ pub struct Address {
 #[derive(Clone, Debug)]
 pub struct BlockDir {
     transport: Arc<dyn Transport>,
+    index: Arc<dyn BlockIndex>,
 }
 
 /// Returns the transport-relative subdirectory name.
@@ -78,34 +80,40 @@ fn subdir_relpath(block_hash: &str) -> &str {
 }
 
 /// Return the transport-relative file for a given hash.
-fn block_relpath(hash: &BlockHash) -> String {
+pub(crate) fn block_relpath(hash: &BlockHash) -> String {
     let hash_hex = hash.to_string();
     format!("{}/{}", subdir_relpath(&hash_hex), hash_hex)
 }
 
 impl BlockDir {
     pub fn open_path(path: &Path) -> BlockDir {
-        BlockDir::open(Box::new(LocalTransport::new(path)))
+        BlockDir::open(Arc::new(LocalTransport::new(path)))
     }
 
-    pub fn open(transport: Box<dyn Transport>) -> BlockDir {
+    pub fn open(transport: Arc<dyn Transport>) -> BlockDir {
         BlockDir {
-            transport: Arc::from(transport),
+            index: Arc::new(FsBlockIndex::new(Arc::clone(&transport))),
+            transport,
+        }
+    }
+
+    pub fn open_cached(transport: Arc<dyn Transport>) -> BlockDir {
+        BlockDir {
+            index: Arc::new(CachedBlockIndex::load(transport.clone()).unwrap()),
+            transport,
         }
     }
 
     /// Create a BlockDir directory and return an object accessing it.
     pub fn create_path(path: &Path) -> Result<BlockDir> {
-        BlockDir::create(Box::new(LocalTransport::new(path)))
+        BlockDir::create(Arc::new(LocalTransport::new(path)))
     }
 
-    pub fn create(transport: Box<dyn Transport>) -> Result<BlockDir> {
+    pub fn create(transport: Arc<dyn Transport>) -> Result<BlockDir> {
         transport
             .create_dir("")
             .map_err(|source| Error::CreateBlockDir { source })?;
-        Ok(BlockDir {
-            transport: Arc::from(transport),
-        })
+        Ok(Self::open(transport))
     }
 
     /// Returns the number of compressed bytes.
@@ -154,9 +162,7 @@ impl BlockDir {
 
     /// True if the named block is present in this directory.
     pub fn contains(&self, hash: &BlockHash) -> Result<bool> {
-        self.transport
-            .is_file(&block_relpath(hash))
-            .map_err(Error::from)
+        self.index.contains_block(hash)
     }
 
     /// Returns the compressed on-disk size of a block.
@@ -188,6 +194,8 @@ impl BlockDir {
     }
 
     pub fn delete_block(&self, hash: &BlockHash) -> Result<()> {
+        self.index.delete_block(hash);
+
         self.transport
             .remove_file(&block_relpath(hash))
             .map_err(Error::from)
