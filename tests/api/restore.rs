@@ -12,16 +12,8 @@
 
 //! Tests focussed on restore.
 
-#[cfg(unix)]
-use std::fs::{read_link, symlink_metadata};
-use std::path::PathBuf;
-
-use filetime::{set_symlink_file_times, FileTime};
-use tempfile::TempDir;
-
 use conserve::test_fixtures::ScratchArchive;
 use conserve::test_fixtures::TreeFixture;
-use conserve::unix_time::UnixTime;
 use conserve::*;
 
 #[test]
@@ -42,7 +34,7 @@ fn simple_restore() {
     assert!(dest.join("subdir").is_dir());
     assert!(dest.join("subdir").join("subfile").is_file());
     if SYMLINKS_SUPPORTED {
-        let dest = std::fs::read_link(&dest.join("link")).unwrap();
+        let dest = std::fs::read_link(dest.join("link")).unwrap();
         assert_eq!(dest.to_string_lossy(), "target");
     }
 
@@ -104,7 +96,7 @@ fn exclude_files() {
     let restore_archive = Archive::open_path(af.path()).unwrap();
     let options = RestoreOptions {
         overwrite: true,
-        exclude: Exclude::from_strings(&["/**/subfile"]).unwrap(),
+        exclude: Exclude::from_strings(["/**/subfile"]).unwrap(),
         ..RestoreOptions::default()
     };
     let stats = restore(&restore_archive, destdir.path(), &options, None).expect("restore");
@@ -119,6 +111,14 @@ fn exclude_files() {
 #[test]
 #[cfg(unix)]
 fn restore_symlink() {
+    use std::path::PathBuf;
+    use std::fs::{read_link, symlink_metadata};
+
+    use tempfile::TempDir;
+    use filetime::{set_symlink_file_times, FileTime};
+    
+    use conserve::unix_time::UnixTime;
+    
     let af = ScratchArchive::new();
     let srcdir = TreeFixture::new();
 
@@ -128,7 +128,7 @@ fn restore_symlink() {
         nanosecs: 0,
     };
     let mtime: FileTime = years_ago.into();
-    set_symlink_file_times(&srcdir.path().join("symlink"), mtime, mtime).unwrap();
+    set_symlink_file_times(srcdir.path().join("symlink"), mtime, mtime).unwrap();
 
     backup(&af, &srcdir.live_tree(), &Default::default(), None).unwrap();
 
