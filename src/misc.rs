@@ -15,7 +15,6 @@
 
 use std::time::Duration;
 
-
 use crate::stats::Sizes;
 
 pub fn bytes_to_human_mb(s: u64) -> String {
