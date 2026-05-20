@@ -80,11 +80,8 @@ enum Command {
         /// Print copied file names.
         #[arg(long, short)]
         verbose: bool,
-        #[arg(long, short)]
-        exclude: Vec<String>,
-        /// Read a list of globs to exclude from this file.
-        #[arg(long, short = 'E')]
-        exclude_from: Vec<String>,
+        #[clap(flatten)]
+        path_filter: PathFilterOptions,
         /// Don't print statistics after the backup completes.
         #[arg(long)]
         no_stats: bool,
@@ -122,10 +119,8 @@ enum Command {
         /// Select the version from the archive to compare: by default, the latest.
         #[arg(long, short)]
         backup: Option<BandId>,
-        #[arg(long, short)]
-        exclude: Vec<String>,
-        #[arg(long, short = 'E')]
-        exclude_from: Vec<String>,
+        #[clap(flatten)]
+        path_filter: PathFilterOptions,
         #[arg(long)]
         include_unchanged: bool,
 
@@ -159,11 +154,8 @@ enum Command {
         #[command(flatten)]
         stos: StoredTreeOrSource,
 
-        #[arg(long, short)]
-        exclude: Vec<String>,
-
-        #[arg(long, short = 'E')]
-        exclude_from: Vec<String>,
+        #[clap(flatten)]
+        path_filter: PathFilterOptions,
 
         /// Print entries as json.
         #[arg(long, short)]
@@ -217,11 +209,8 @@ enum Command {
         force_overwrite: bool,
         #[arg(long, short)]
         verbose: bool,
-        #[arg(long, short)]
-        exclude: Vec<String>,
-        #[arg(long, short = 'E')]
-        exclude_from: Vec<String>,
-        #[arg(long = "only", short = 'i')]
+        #[clap(flatten)]
+        path_filter: PathFilterOptions,
         only_subtree: Option<Apath>,
         #[arg(long)]
         no_stats: bool,
@@ -239,10 +228,8 @@ enum Command {
         #[arg(long)]
         bytes: bool,
 
-        #[arg(long, short)]
-        exclude: Vec<String>,
-        #[arg(long, short = 'E')]
-        exclude_from: Vec<String>,
+        #[clap(flatten)]
+        path_filter: PathFilterOptions,
     },
 
     /// Check that an archive is internally consistent.
@@ -293,6 +280,17 @@ struct StoredTreeOrSource {
     backup: Option<BandId>,
 }
 
+#[derive(Debug, Parser)]
+struct PathFilterOptions {
+    /// Ignore paths matching the glob pattern.
+    #[arg(long, short)]
+    exclude: Vec<String>,
+
+    /// Read a list of globs to exclude from this file.
+    #[arg(long, short = 'E')]
+    exclude_from: Vec<String>,
+}
+
 /// Show debugging information.
 #[derive(Debug, Subcommand)]
 enum Debug {
@@ -328,6 +326,12 @@ impl std::process::Termination for ExitCode {
     }
 }
 
+impl PathFilterOptions {
+    pub fn create_path_filter(&self) -> Result<Exclude> {
+        Exclude::from_patterns_and_files(&self.exclude, &self.exclude_from)
+    }
+}
+
 impl Command {
     #[tokio::main]
     async fn run(&self, monitor: Arc<TermUiMonitor>) -> Result<ExitCode> {
@@ -336,15 +340,14 @@ impl Command {
             Command::Backup {
                 archive,
                 changes_json,
-                exclude,
-                exclude_from,
+                path_filter,
                 long_listing,
                 no_stats,
                 source,
                 verbose,
             } => {
                 let options = BackupOptions {
-                    exclude: Exclude::from_patterns_and_files(exclude, exclude_from)?,
+                    exclude: path_filter.create_path_filter()?,
                     change_callback: make_change_callback(
                         *verbose,
                         *long_listing,
@@ -425,15 +428,14 @@ impl Command {
                 archive,
                 source,
                 backup,
-                exclude,
-                exclude_from,
+                path_filter,
                 include_unchanged,
                 json,
             } => {
                 let st = stored_tree_from_opt(archive, backup).await?;
                 let source = SourceTree::open(source)?;
                 let options = DiffOptions {
-                    exclude: Exclude::from_patterns_and_files(exclude, exclude_from)?,
+                    exclude: path_filter.create_path_filter()?,
                     include_unchanged: *include_unchanged,
                 };
                 let mut bw = BufWriter::new(stdout);
@@ -474,16 +476,15 @@ impl Command {
             Command::Ls {
                 json,
                 stos,
-                exclude,
-                exclude_from,
+                path_filter,
                 long_listing,
             } => {
-                let exclude = Exclude::from_patterns_and_files(exclude, exclude_from)?;
+                let path_filter = path_filter.create_path_filter()?;
                 if let Some(archive) = &stos.archive {
                     // TODO: Option for subtree.
                     let mut stitch = stored_tree_from_opt(archive, &stos.backup)
                         .await?
-                        .iter_entries(Apath::root(), exclude, monitor.clone());
+                        .iter_entries(Apath::root(), path_filter, monitor.clone());
                     while let Some(entry) = stitch.next().await {
                         // Strip off index internals like addresses; this seems
                         // like not quite the right way to do it, maybe the types should
@@ -499,7 +500,7 @@ impl Command {
                     // TODO: Can maybe unify these more when the source tree iter is also async.
                     let entry_iter = SourceTree::open(stos.source.clone().unwrap())?.iter_entries(
                         Apath::root(),
-                        exclude,
+                        path_filter,
                         monitor.clone(),
                     )?;
                     for entry in entry_iter {
@@ -555,8 +556,7 @@ impl Command {
                 changes_json,
                 verbose,
                 force_overwrite,
-                exclude,
-                exclude_from,
+                path_filter,
                 only_subtree,
                 long_listing,
                 no_stats,
@@ -565,7 +565,7 @@ impl Command {
                 let archive = Archive::open(Transport::new(archive).await?).await?;
                 let _ = no_stats; // accepted but ignored; we never currently print stats
                 let options = RestoreOptions {
-                    exclude: Exclude::from_patterns_and_files(exclude, exclude_from)?,
+                    exclude: path_filter.create_path_filter()?,
                     only_subtree: only_subtree.clone(),
                     band_selection,
                     overwrite: *force_overwrite,
@@ -582,10 +582,9 @@ impl Command {
             Command::Size {
                 stos,
                 bytes,
-                exclude,
-                exclude_from,
+                path_filter,
             } => {
-                let exclude = Exclude::from_patterns_and_files(exclude, exclude_from)?;
+                let exclude = path_filter.create_path_filter()?;
                 let size = if let Some(archive) = &stos.archive {
                     stored_tree_from_opt(archive, &stos.backup)
                         .await?
