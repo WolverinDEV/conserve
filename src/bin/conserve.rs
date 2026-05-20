@@ -283,12 +283,16 @@ struct StoredTreeOrSource {
 #[derive(Debug, Parser)]
 struct PathFilterOptions {
     /// Ignore paths matching the glob pattern.
-    #[arg(long, short)]
+    #[arg(long, short, conflicts_with = "ignore_file")]
     exclude: Vec<String>,
 
     /// Read a list of globs to exclude from this file.
-    #[arg(long, short = 'E')]
+    #[arg(long, short = 'E', conflicts_with = "ignore_file")]
     exclude_from: Vec<String>,
+
+    /// Specify a gitignore like ignorefile
+    #[arg(long, short)]
+    ignore_file: Option<PathBuf>,
 }
 
 /// Show debugging information.
@@ -328,7 +332,11 @@ impl std::process::Termination for ExitCode {
 
 impl PathFilterOptions {
     pub fn create_path_filter(&self) -> Result<Exclude> {
-        Exclude::from_patterns_and_files(&self.exclude, &self.exclude_from)
+        if let Some(file) = &self.ignore_file {
+            Exclude::from_ignorefile(file)
+        } else {
+            Exclude::from_patterns_and_files(&self.exclude, &self.exclude_from)
+        }
     }
 }
 
