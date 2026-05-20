@@ -520,7 +520,7 @@ impl Command {
             } => {
                 use std::io::Read;
 
-                let archive = Archive::open(Transport::new(archive)?)?;
+                let archive = Archive::open(Transport::new(archive).await?).await?;
                 let options = MountOptions { clean: *cleanup };
                 let projection = match mount(archive, destination, options) {
                     Ok(handle) => handle,
