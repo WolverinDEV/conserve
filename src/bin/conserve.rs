@@ -211,6 +211,7 @@ enum Command {
         verbose: bool,
         #[clap(flatten)]
         path_filter: PathFilterOptions,
+        #[arg(long = "only", short = 'i')]
         only_subtree: Option<Apath>,
         #[arg(long)]
         no_stats: bool,
