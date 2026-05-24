@@ -332,7 +332,7 @@ impl std::process::Termination for ExitCode {
 }
 
 impl PathFilterOptions {
-    pub fn create_path_filter(&self) -> Result<Exclude> {
+    pub fn to_exclude(&self) -> Result<Exclude> {
         if let Some(file) = &self.ignore_file {
             Exclude::from_ignorefile(file)
         } else {
@@ -356,7 +356,7 @@ impl Command {
                 verbose,
             } => {
                 let options = BackupOptions {
-                    exclude: path_filter.create_path_filter()?,
+                    exclude: path_filter.to_exclude()?,
                     change_callback: make_change_callback(
                         *verbose,
                         *long_listing,
@@ -444,7 +444,7 @@ impl Command {
                 let st = stored_tree_from_opt(archive, backup).await?;
                 let source = SourceTree::open(source)?;
                 let options = DiffOptions {
-                    exclude: path_filter.create_path_filter()?,
+                    exclude: path_filter.to_exclude()?,
                     include_unchanged: *include_unchanged,
                 };
                 let mut bw = BufWriter::new(stdout);
@@ -488,7 +488,7 @@ impl Command {
                 path_filter,
                 long_listing,
             } => {
-                let path_filter = path_filter.create_path_filter()?;
+                let path_filter = path_filter.to_exclude()?;
                 if let Some(archive) = &stos.archive {
                     // TODO: Option for subtree.
                     let mut stitch = stored_tree_from_opt(archive, &stos.backup)
@@ -574,7 +574,7 @@ impl Command {
                 let archive = Archive::open(Transport::new(archive).await?).await?;
                 let _ = no_stats; // accepted but ignored; we never currently print stats
                 let options = RestoreOptions {
-                    exclude: path_filter.create_path_filter()?,
+                    exclude: path_filter.to_exclude()?,
                     only_subtree: only_subtree.clone(),
                     band_selection,
                     overwrite: *force_overwrite,
@@ -593,7 +593,7 @@ impl Command {
                 bytes,
                 path_filter,
             } => {
-                let exclude = path_filter.create_path_filter()?;
+                let exclude = path_filter.to_exclude()?;
                 let size = if let Some(archive) = &stos.archive {
                     stored_tree_from_opt(archive, &stos.backup)
                         .await?
